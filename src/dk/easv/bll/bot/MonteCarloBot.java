@@ -6,6 +6,8 @@ import dk.easv.bll.game.IGameState;
 import dk.easv.bll.move.IMove;
 import dk.easv.bll.move.Move;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
@@ -13,7 +15,7 @@ public class MonteCarloBot implements IBot {
 
     private static final String BOTNAME = "Monte Carlo Bot";
     private Random rand = new Random();
-    private static final int SIMULATION_COUNT = 1000;
+    private static final int SIMULATION_COUNT = 500;
 
     @Override
     public IMove doMove(IGameState state) {
@@ -22,12 +24,31 @@ public class MonteCarloBot implements IBot {
         System.out.println("Available Moves: " + moves.size());
 
         if (!moves.isEmpty()) {
+            // Shuffle the list of moves
+            Collections.shuffle(moves);
+
             // Perform Monte Carlo Tree Search
             IMove bestMove = null;
             int maxScore = Integer.MIN_VALUE;
 
             for (IMove move : moves) {
-                int score = simulateMove(state, move);
+                int score = 0;
+
+                // Check if the move leads to winning the macroboard
+                if (isWinningMove(state, move)) {
+                    score = Integer.MAX_VALUE;
+                } else {
+                    // Get winning moves within the macroboard
+                    List<IMove> winningMoves = getWinningMovesWithinMacroboard(state, move.getX() / 3, move.getY() / 3);
+                    if (!winningMoves.isEmpty()) {
+                        // Prioritize winning moves
+                        score = Integer.MAX_VALUE - 1;
+                    } else {
+                        // Simulate moves randomly
+                        score = simulateMove(state, move);
+                    }
+                }
+
                 System.out.println("Move " + move.getX() + ", " + move.getY() + ": Score " + score);
                 if (score > maxScore) {
                     maxScore = score;
@@ -35,7 +56,7 @@ public class MonteCarloBot implements IBot {
                 }
             }
 
-            System.out.println("Best Move: " + bestMove.getX() + ", " + bestMove.getY());
+            System.out.println("Best Move: " + bestMove.getX() + ", " + bestMove.getY() + maxScore);
 
             return bestMove;
         }
@@ -48,6 +69,7 @@ public class MonteCarloBot implements IBot {
         int totalScore = 0;
         System.out.println("Simulating move: " + move.getX() + ", " + move.getY());
 
+        // Check if the move leads to winning the macroboard
         if (isWinningMove(state, move)) {
             // Winning move found, return a high score
             return Integer.MAX_VALUE;
@@ -58,6 +80,7 @@ public class MonteCarloBot implements IBot {
             int macroX = move.getX() / 3; // Adjust the x-coordinate for the macroboard
             int macroY = move.getY() / 3; // Adjust the y-coordinate for the macroboard
             simulatedState.getField().getMacroboard()[macroX][macroY] = currentPlayerId;
+
             // Simulate random moves until the game ends
             while (!simulatedState.getField().isFull()) {
                 List<IMove> availableMoves = simulatedState.getField().getAvailableMoves();
@@ -72,23 +95,22 @@ public class MonteCarloBot implements IBot {
                 // Update currentPlayerId for the next move
                 currentPlayerId = currentPlayerId.equals("X") ? "O" : "X";
             }
-            if (simulatedState.getField().isFull()) {
-                // Tie
-                totalScore += 0;
-                System.out.println("Game ended in a tie.");
-            } else {
-                // Assuming our bot is always "X"
-                if (simulatedState.getField().getPlayerId(0, 0).equals("0")) { // Check if currentPlayer represents the bot
-                    totalScore += 1;
-                    System.out.println("Bot wins.");
-                } else {
-                    totalScore -= 1;
-                    System.out.println("Bot loses.");
-                }
-            }
+
+            // Calculate the score based on the outcome of the simulation
+            int score = calculateScore(simulatedState);
+            totalScore += score;
         }
 
         return totalScore;
+    }
+
+    private int calculateScore(IGameState state) {
+        // Assuming our bot is always "X"
+        if (state.getField().getPlayerId(0, 0).equals("0")) { // Check if currentPlayer represents the bot
+            return 1; // Bot wins
+        } else {
+            return -1; // Bot loses
+        }
     }
 
     @Override
@@ -148,4 +170,34 @@ public class MonteCarloBot implements IBot {
             return "O";
         }
     }
+
+    private List<IMove> getWinningMovesWithinMacroboard(IGameState state, int macroX, int macroY) {
+        List<IMove> winningMoves = new ArrayList<>();
+        String[][] macroboard = state.getField().getMacroboard();
+
+        // Iterate over all cells within the same macroboard
+        for (int i = macroX * 3; i < macroX * 3 + 3 && i < macroboard.length; i++) {
+            for (int j = macroY * 3; j < macroY * 3 + 3 && j < macroboard[i].length; j++) {
+                // Check if the cell is available
+                if (macroboard[i][j].equals(IField.AVAILABLE_FIELD)) {
+                    // Simulate placing a move in this cell
+                    macroboard[i][j] = currentPlayerId(state);
+
+                    // Check if this move would lead to winning the macroboard
+                    if (isMacroboardWonByPlayer(macroboard, currentPlayerId(state), macroX, macroY)) {
+                        // If placing a move in this cell would win the macroboard, add it to the list of winning moves
+                        winningMoves.add(new Move(i, j));
+                    }
+
+                    // Undo the move for further simulations
+                    macroboard[i][j] = IField.AVAILABLE_FIELD;
+                }
+            }
+        }
+
+        return winningMoves;
+    }
+
+
+
 }
