@@ -22,6 +22,7 @@ public class GameState implements IGameState{
 
         moveNumber = state.getMoveNumber();
         roundNumber = state.getRoundNumber();
+
     }
 
     @Override
