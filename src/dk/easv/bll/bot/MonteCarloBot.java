@@ -48,6 +48,11 @@ public class MonteCarloBot implements IBot {
         int totalScore = 0;
         System.out.println("Simulating move: " + move.getX() + ", " + move.getY());
 
+        if (isWinningMove(state, move)) {
+            // Winning move found, return a high score
+            return Integer.MAX_VALUE;
+        }
+
         for (int i = 0; i < SIMULATION_COUNT; i++) {
             IGameState simulatedState = new GameState(state); // Create a copy of the current game state
             int macroX = move.getX() / 3; // Adjust the x-coordinate for the macroboard
@@ -92,6 +97,50 @@ public class MonteCarloBot implements IBot {
     }
 
     private String getCurrentPlayerId(IGameState state) {
+        // Assuming players are represented as "X" and "O" in the board
+        if (state.getMoveNumber() % 2 == 0) {
+            return "X";
+        } else {
+            return "O";
+        }
+    }
+
+    private boolean isWinningMove(IGameState state, IMove move) {
+        int macroX = move.getX() / 3; // Adjust the x-coordinate for the macroboard
+        int macroY = move.getY() / 3; // Adjust the y-coordinate for the macroboard
+        String[][] macroboard = state.getField().getMacroboard();
+
+        // Check if placing the move leads to winning the corresponding macroboard
+        return isMacroboardWonByPlayer(macroboard, currentPlayerId(state), macroX, macroY);
+    }
+
+    private boolean isMacroboardWonByPlayer(String[][] macroboard, String playerId, int macroX, int macroY) {
+        // Check rows
+        if (isWin(macroboard[macroX][0], macroboard[macroX][1], macroboard[macroX][2])) {
+            return true;
+        }
+
+        // Check columns
+        if (isWin(macroboard[0][macroY], macroboard[1][macroY], macroboard[2][macroY])) {
+            return true;
+        }
+
+        // Check diagonals
+        if ((isWin(macroboard[0][0], macroboard[1][1], macroboard[2][2]) && (macroX == macroY)) ||
+                (isWin(macroboard[0][2], macroboard[1][1], macroboard[2][0]) && (macroX + macroY == 2))) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private boolean isWin(String cell1, String cell2, String cell3) {
+        return !cell1.equals(IField.AVAILABLE_FIELD) &&
+                cell1.equals(cell2) &&
+                cell2.equals(cell3);
+    }
+
+    private String currentPlayerId(IGameState state) {
         // Assuming players are represented as "X" and "O" in the board
         if (state.getMoveNumber() % 2 == 0) {
             return "X";
