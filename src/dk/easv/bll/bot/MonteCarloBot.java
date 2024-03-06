@@ -16,20 +16,44 @@ public class MonteCarloBot implements IBot {
     private static final String BOTNAME = "Monte Carlo Bot";
     private Random rand = new Random();
     private static final int SIMULATION_COUNT = 100;
-    private static final int TIME_LIMIT = 1000; // 1000 milliseconds
-    private static final double EXPLORATION_PARAMETER = 1.414; // UCT exploration parameter
+    private static int TIME_LIMIT = 111; // 1000 milliseconds
+    private static final double EXPLORATION_PARAMETER = 6; // UCT exploration parameter
+    private String whatPlayerAmI;
 
     @Override
     public IMove doMove(IGameState state) {
         List<IMove> moves = state.getField().getAvailableMoves();
+        int originalTimeLimit = TIME_LIMIT;
+
+        // Adjust TIME_LIMIT based on the size of the available moves list
+        if (moves.size() > 9) {
+            TIME_LIMIT = 10;
+        } else {
+            TIME_LIMIT = 111;
+        }
 
         System.out.println("Available Moves: " + moves.size());
 
         if (!moves.isEmpty()) {
+            // Check if any available moves are winning moves
+            for (IMove move : moves) {
+                if (isWin(state.getField().getBoard(), move, "1")) {
+                    System.out.println("Winning Move: " + move.getX() + ", " + move.getY());
+                    return move;
+                }
+            }
+
+            for (IMove move : moves) {
+                if (isWin(state.getField().getBoard(), move, "1")) {
+                    System.out.println("Winning Move: " + move.getX() + ", " + move.getY());
+                    return move;
+                }
+            }
+
             IMove bestMove = null;
             double bestUCBValue = Double.NEGATIVE_INFINITY;
 
-            // Perform Monte Carlo Tree Search
+            // Perform Monte Carlo Tree Search for non-winning moves
             for (IMove move : moves) {
                 long startTime = System.currentTimeMillis(); // Reset startTime for each move
                 int simulations = 0;
@@ -55,13 +79,16 @@ public class MonteCarloBot implements IBot {
                     bestMove = move;
                 }
 
-                System.out.println("Move: " + move.getX() + ", " + move.getY() + " - Average UCB Value: " + moveUCBValue);
             }
 
-            System.out.println("Best Move: " + bestMove.getX() + ", " + bestMove.getY() + " with UCB value " + bestUCBValue);
+            // Reset TIME_LIMIT to its original value
+            TIME_LIMIT = originalTimeLimit;
 
             return bestMove;
         }
+
+        // Reset TIME_LIMIT to its original value
+        TIME_LIMIT = originalTimeLimit;
 
         return null;
     }
@@ -70,7 +97,6 @@ public class MonteCarloBot implements IBot {
         // Simulate moves using UCT strategy
         int totalScore = 0;
         for (int i = 0; i < simulations; i++) {
-            System.out.println("Simulating move: " + move.getX() + ", " + move.getY() + " - Simulation: " + (i + 1) + "/" + simulations);
             IGameState simulatedState = new GameState(state);
             simulateRandomMoves(simulatedState, move);
             int score = evaluateState(simulatedState);
@@ -96,8 +122,7 @@ public class MonteCarloBot implements IBot {
             int randomMacroX = randomMove.getX() / 3;
             int randomMacroY = randomMove.getY() / 3;
             currentState.getField().getMacroboard()[randomMacroX][randomMacroY] = currentPlayerId;
-            currentPlayerId = currentPlayerId.equals("X") ? "O" : "X";
-            System.out.println("Simulating move: " + randomMove.getX() + ", " + randomMove.getY());
+            currentPlayerId = currentPlayerId.equals("0") ? "1" : "0";
         }
     }
 
@@ -110,7 +135,7 @@ public class MonteCarloBot implements IBot {
         }
 
         // Check if the opponent wins
-        String opponentPlayerId = getCurrentPlayerId(state).equals("X") ? "O" : "X";
+        String opponentPlayerId = getCurrentPlayerId(state).equals("0") ? "1" : "0";
         if (isWinningPlayer(state, opponentPlayerId)) {
             return Integer.MIN_VALUE;
         }
@@ -196,11 +221,11 @@ public class MonteCarloBot implements IBot {
     }
 
     private String getCurrentPlayerId(IGameState state) {
-        // Assuming players are represented as "X" and "O" in the board
+        // Assuming players are represented as "0" and "1" in the board
         if (state.getMoveNumber() % 2 == 0) {
-            return "X";
+            return "0";
         } else {
-            return "O";
+            return "1";
         }
     }
 
@@ -215,31 +240,68 @@ public class MonteCarloBot implements IBot {
 
     private boolean isMacroboardWonByPlayer(String[][] macroboard, String playerId, int macroX, int macroY) {
         // Check rows
-        if (isWin(macroboard[macroX][0], macroboard[macroX][1], macroboard[macroX][2])) {
+        if (isWin(macroboard, new Move(macroX * 3, macroY * 3), playerId)) {
             return true;
         }
 
         // Check columns
-        if (isWin(macroboard[0][macroY], macroboard[1][macroY], macroboard[2][macroY])) {
+        if (isWin(macroboard, new Move(macroX * 3, macroY * 3), playerId)) {
             return true;
         }
 
         // Check diagonals
-        if ((isWin(macroboard[0][0], macroboard[1][1], macroboard[2][2]) && (macroX == macroY)) ||
-                (isWin(macroboard[0][2], macroboard[1][1], macroboard[2][0]) && (macroX + macroY == 2))) {
+        if ((isWin(macroboard, new Move(macroX * 3, macroY * 3), playerId)) ||
+                (isWin(macroboard, new Move(macroX * 3, macroY * 3), playerId))) {
             return true;
         }
 
         return false;
     }
 
-    private boolean isWin(String cell1, String cell2, String cell3) {
-        return !cell1.equals(IField.AVAILABLE_FIELD) &&
-                cell1.equals(cell2) &&
-                cell2.equals(cell3);
+    public static boolean isWin(String[][] board, IMove move, String currentPlayer){
+        int localX = move.getX() % 3;
+        int localY = move.getY() % 3;
+        int startX = move.getX() - (localX);
+        int startY = move.getY() - (localY);
+
+        //check col
+        for (int i = startY; i < startY + 3; i++) {
+            if (!board[move.getX()][i].equals(currentPlayer))
+                break;
+            if (i == startY + 3 - 1) return true;
+        }
+
+        //check row
+        for (int i = startX; i < startX + 3; i++) {
+            if (!board[i][move.getY()].equals(currentPlayer))
+                break;
+            if (i == startX + 3 - 1) return true;
+        }
+
+        //check diagonal
+        if (localX == localY) {
+            //we're on a diagonal
+            int y = startY;
+            for (int i = startX; i < startX + 3; i++) {
+                if (!board[i][y++].equals(currentPlayer))
+                    break;
+                if (i == startX + 3 - 1) return true;
+            }
+        }
+
+        //check anti diagonal
+        if (localX + localY == 3 - 1) {
+            int less = 0;
+            for (int i = startX; i < startX + 3; i++) {
+                if (!board[i][(startY + 2)-less++].equals(currentPlayer))
+                    break;
+                if (i == startX + 3 - 1) return true;
+            }
+        }
+        return false;
     }
 
-    private List<IMove> getWinningMovesWithinMacroboard(IGameState state, int macroX, int macroY) {
+    /*private List<IMove> getWinningMovesWithinMacroboard(IGameState state, int macroX, int macroY) {
         List<IMove> winningMoves = new ArrayList<>();
         String[][] macroboard = state.getField().getMacroboard();
 
@@ -274,7 +336,7 @@ public class MonteCarloBot implements IBot {
         }
 
         return winningMoves;
-    }
+    }*/
 
     @Override
     public String getBotName() {
